@@ -308,3 +308,35 @@ async fn a_value_that_took_over_from_another_is_not_a_contradiction() -> anyhow:
     assert_eq!(hold(&clash), Some(Hold::Contradiction("CEO of".into())));
     Ok(())
 }
+
+#[tokio::test]
+async fn a_clash_one_side_already_had_is_not_the_merges() -> anyhow::Result<()> {
+    let Some(url) = utopia_store::test_db::url() else {
+        return Ok(());
+    };
+    let pool = PgPool::connect(&url).await?;
+    let f = seed(&pool).await?;
+    // b 自己已经挂着两个没日期的值；a 只挂着其中一个
+    fact(&pool, f.kb, f.b, f.ceo_of, f.c1).await?;
+    fact(&pool, f.kb, f.b, f.ceo_of, f.c2).await?;
+    fact(&pool, f.kb, f.a, f.ceo_of, f.c1).await?;
+    let impact = impact_of(&pool, f.kb, f.a, f.b).await?;
+
+    sqlx::query("DELETE FROM knowledge_bases WHERE id = $1")
+        .bind(f.kb)
+        .execute(&pool)
+        .await?;
+    sqlx::query("DELETE FROM users WHERE id = $1")
+        .bind(f.user)
+        .execute(&pool)
+        .await?;
+    sqlx::query("DELETE FROM organizations WHERE id = $1")
+        .bind(f.org)
+        .execute(&pool)
+        .await?;
+    assert!(
+        impact.contradictions.is_empty(),
+        "the clash was on b before the merge: {impact:?}"
+    );
+    Ok(())
+}

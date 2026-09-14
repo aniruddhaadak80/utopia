@@ -642,6 +642,24 @@ pub async fn merge_would_overlap(
             .bind(s.predicate_id)
             .fetch_all(pool)
             .await?;
+            // **只算合并带进来的冲突。** 一边持有的值另一边全都已经持有，合起来还是那几个值：
+            // 同一个宾语并成一行，冲突要有也是那一边原本就有的，合不合都在。租约链上实测：
+            // 一份租约自己已经挂着两个没日期的房东，另一个写法只挂着其中一个，0.98 的合并被
+            // 「两个房东」挡下，而那两个房东合并之前就在
+            let values_of = |holder: Uuid| -> HashSet<Uuid> {
+                rows.iter()
+                    .filter_map(|r| match side {
+                        Uniqueness::SubjectSide => (r.subject_id == holder).then_some(r.object_id?),
+                        Uniqueness::ObjectSide => {
+                            (r.object_id == Some(holder)).then_some(r.subject_id)
+                        }
+                    })
+                    .collect()
+            };
+            let (held_by_a, held_by_b) = (values_of(a), values_of(b));
+            if held_by_a.is_subset(&held_by_b) || held_by_b.is_subset(&held_by_a) {
+                continue;
+            }
             // 合成一个之后的样子：持有者那一侧都是同一个实体
             for row in &mut rows {
                 match side {
