@@ -467,6 +467,13 @@ fn opening_block(opening: Option<&str>) -> String {
     )
 }
 
+/// 一段描述的第一句（句子边界按 UAX #29）。按块检索出的清单只带这一句：schema.org 的
+/// 描述后半截多是用法说明与示例，一块铺上百行时它们占了清单的八成
+pub fn first_sentence(text: &str) -> &str {
+    use unicode_segmentation::UnicodeSegmentation;
+    text.trim().unicode_sentences().next().map_or("", str::trim)
+}
+
 /// 清单里给关系带的标记：事件 `[event]`、恒常 `[eternal]`；状态不标。
 /// 认不出的值当状态——数据库的 CHECK 只放这三个进来，这里不再报错
 fn temporal_mark(temporal: &str) -> Option<&'static str> {
@@ -1806,6 +1813,24 @@ mod tests {
             Some(json!(35000.0))
         );
         assert_eq!(normalize_attr_value("number", &json!("about ten")), None);
+    }
+
+    #[test]
+    fn a_description_is_cut_at_its_first_sentence() {
+        assert_eq!(
+            first_sentence(
+                "  The date on which the CreativeWork was created. See also dateModified.
+
+Example: 2020-01-01."
+            ),
+            "The date on which the CreativeWork was created."
+        );
+        assert_eq!(
+            first_sentence("一个有名有姓的人。可以是虚构的。"),
+            "一个有名有姓的人。"
+        );
+        assert_eq!(first_sentence("A person"), "A person");
+        assert_eq!(first_sentence("   "), "");
     }
 
     #[test]
