@@ -401,8 +401,15 @@ fn name_doubts(shape: gov::NameShape) -> bool {
 /// 闸门看的名字形状。第二层带着两边的事实与原文看过、仍说是同一个的，形状的疑点已经由
 /// 证据答过了，不再按形状拦——拦的只剩没看过证据的第一层
 fn shape_for_gate(item: &ReviewItem, look: &Look) -> gov::NameShape {
-    let shape = gov::name_shape(&item.left.name, &item.right.name);
-    if look.calls > 0 && name_doubts(shape) {
+    settled_shape(
+        gov::name_shape(&item.left.name, &item.right.name),
+        look.calls > 0,
+    )
+}
+
+/// 形状的疑点在第二层读过证据之后就答完了
+fn settled_shape(shape: gov::NameShape, evidence_read: bool) -> gov::NameShape {
+    if evidence_read && name_doubts(shape) {
         gov::NameShape::Unrelated
     } else {
         shape
@@ -928,5 +935,30 @@ pub async fn after_human_decision(
             }
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_doubtful_shape_stops_counting_once_the_evidence_was_read() {
+        let lease = gov::name_shape(
+            "Lease Agreement dated May 16, 2016, as amended",
+            "Lease Agreement",
+        );
+        assert!(name_doubts(lease), "{lease:?}");
+        assert_eq!(settled_shape(lease, false), lease);
+        assert_eq!(settled_shape(lease, true), gov::NameShape::Unrelated);
+
+        let version = gov::name_shape("Claude Mythos 5", "Claude Mythos");
+        assert!(name_doubts(version), "{version:?}");
+        assert_eq!(settled_shape(version, false), version);
+
+        // 形状本来就不起疑的，读没读过证据都照旧
+        let same = gov::name_shape("OpenAI", "OpenAI");
+        assert!(!name_doubts(same));
+        assert_eq!(settled_shape(same, true), same);
     }
 }
