@@ -542,6 +542,14 @@ fn known_block(known: &[KnownEntity]) -> String {
 /// 从 LLM 回复中稳健地取出 JSON 块（容忍代码围栏与前后废话）。
 pub fn json_block(raw: &str) -> anyhow::Result<String> {
     let text = raw.trim();
+    // 推理模型的思考过程（#690）：`LlmClient::chat` 那边会先切，但取块这一层
+    // 自己认得标记才是最后的保障——`chat_tools` 那条路就不经过 `chat`。
+    // 不切的话，思考过程里的大括号会把下面"第一个 `{`"的起点提前，
+    // 而修补截断的逻辑认不出夹在中间的废话，整块直接作废。
+    let text = match text.rfind("</think>") {
+        Some(pos) => text[pos + "</think>".len()..].trim(),
+        None => text,
+    };
     let cleaned = text
         .strip_prefix("```json")
         .or_else(|| text.strip_prefix("```"))
@@ -2076,6 +2084,18 @@ mod tests {
     #[test]
     fn parse_response_with_fence() {
         let raw = "好的，结果如下：\n```json\n{\"entities\":[{\"name\":\"张三\",\"type\":\"person\"}],\"facts\":[]}\n```";
+        let e = parse_response(raw).unwrap();
+        assert_eq!(e.entities.len(), 1);
+        assert_eq!(e.entities[0].type_key, "person");
+    }
+
+    /// #690：思考过程里的大括号不能把 JSON 的起止带偏。
+    ///
+    /// 思考过程里这个没闭合的 `{` 会把"第一个 `{`"的起点提前，而修补截断的逻辑
+    /// 认不出夹在中间的废话——不切掉标记，整块直接报解析失败作废。
+    #[test]
+    fn parse_response_ignores_a_think_block_before_the_json() {
+        let raw = "先想想 {\"a\": 1，再回答。\n</think>{\"entities\":[{\"name\":\"张三\",\"type\":\"person\"}],\"facts\":[]}";
         let e = parse_response(raw).unwrap();
         assert_eq!(e.entities.len(), 1);
         assert_eq!(e.entities[0].type_key, "person");
