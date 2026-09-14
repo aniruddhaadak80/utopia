@@ -1819,9 +1819,7 @@ mod tests {
     fn a_description_is_cut_at_its_first_sentence() {
         assert_eq!(
             first_sentence(
-                "  The date on which the CreativeWork was created. See also dateModified.
-
-Example: 2020-01-01."
+                "  The date on which the CreativeWork was created. See also dateModified.\n\nExample: 2020-01-01."
             ),
             "The date on which the CreativeWork was created."
         );
