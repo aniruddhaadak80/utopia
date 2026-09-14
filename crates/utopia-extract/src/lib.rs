@@ -779,6 +779,13 @@ Names:\n\
   \"DeepMind\", \"OpenAI Ireland Ltd\" is not \"OpenAI\", \"Microsoft AI\" is not \
   \"Microsoft\"), a project, programme, team, app or component. Never merge a version into \
   its family or a part into its whole.\n\
+- A document, agreement or filing is cited in many ways and stays one thing through its \
+  amendments: \"the Lease\", \"Lease Agreement\", \"Lease Agreement dated May 16, 2016\" and \
+  \"Lease Agreement dated May 16, 2016, as amended\" are one agreement when their parties and \
+  subject do not contradict each other. When it was signed and that it was amended describe \
+  the agreement; they do not make a second one. Each amendment is a document of its own, and \
+  an agreement for other premises, another phase or other parties (\"Phase 2 Lease\") is a \
+  different agreement.\n\
 - A phrase that merely contains a name is not that name: \"Sam Altman's efforts\", \
   \"psychological abuse from Sam Altman\", \"share sale led by Thrive Capital\", \"leaked \
   letter from the National Data Guardian\", \"ChatGPT played a role in the campaign\", \"a \
