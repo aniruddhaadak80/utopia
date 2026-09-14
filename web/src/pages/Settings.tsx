@@ -47,9 +47,11 @@ import { SsoAdmin } from "./Sso";
  * 传纯数据、回纯结论（含用哪个色调），字串仍在调用处配 i18n；
  * 纯函数方便 vitest 直接钉住这张优先级表。 */
 export type ModelCardTest = { ok: boolean; message: string } | null;
-export type ModelCardSave = { error: string | null; saved: boolean };
+/** `dirty`：这张卡有改过、还没保存的格子 */
+export type ModelCardSave = { error: string | null; saved: boolean; dirty: boolean };
 export type ModelCardStatus =
   | { kind: "note"; tone: "text-ok" | "text-danger"; text: string }
+  | { kind: "unsaved" }
   | { kind: "saved" }
   | { kind: "idle" };
 
@@ -58,13 +60,17 @@ export function modelCardStatus(
   testError: string | null,
   save: ModelCardSave,
 ): ModelCardStatus {
+  /* 测试测的永远是**已保存**的那份配置。卡上有没存的修改时，任何测试结果说的都不是
+     表单里这一份——从前改了密钥直接点测试，看到的是旧密钥的「已连通」，或者格子都填着
+     却说 Not configured（#698 的第 2、3 条）。保存失败的报错仍然先说 */
+  if (save.error)
+    return { kind: "note", tone: "text-danger", text: save.error };
+  if (save.dirty) return { kind: "unsaved" };
   if (test)
     return test.ok
       ? { kind: "note", tone: "text-ok", text: test.message }
       : { kind: "note", tone: "text-danger", text: test.message };
   if (testError) return { kind: "note", tone: "text-danger", text: testError };
-  if (save.error)
-    return { kind: "note", tone: "text-danger", text: save.error };
   if (save.saved) return { kind: "saved" };
   return { kind: "idle" };
 }
@@ -929,6 +935,9 @@ export function Settings() {
   /* 哪张卡按下的"测试"。测一次是两套一起测（一个接口），结果各自回卡；
      但两个按钮共用这一个 mutation，从前按任意一张两张一起转"Testing…"（#698） */
   const [testCard, setTestCard] = useState<"chat" | "embed" | null>(null);
+  /* 两张卡各自有没有改过、还没保存的格子。测试只测已保存的配置，所以有修改的那张卡
+     不让测，备注改说「先保存」；保存成功才清掉（#698） */
+  const [dirty, setDirty] = useState({ chat: false, embed: false });
   /* 开测：上一轮的结论（两边卡的 Saved/报错、上一轮测试结果）全部让位给这一轮 */
   const startTest = () => {
     test.reset();
@@ -947,6 +956,7 @@ export function Settings() {
       test.reset();
       saveChat.reset();
       saveEmbed.reset();
+      setDirty((d) => ({ ...d, [k.startsWith("chat_") ? "chat" : "embed"]: true }));
       setForm({ ...form, [k]: e.target.value });
     };
 
@@ -968,6 +978,7 @@ export function Settings() {
     {
       error: saveChat.error ? (saveChat.error as Error).message : null,
       saved: saveChat.isSuccess,
+      dirty: dirty.chat,
     },
   );
   const embedStatus = modelCardStatus(
@@ -983,6 +994,7 @@ export function Settings() {
     {
       error: saveEmbed.error ? (saveEmbed.error as Error).message : null,
       saved: saveEmbed.isSuccess,
+      dirty: dirty.embed,
     },
   );
   /* 备注的画法两张卡共用：成功走 ok 色、失败走 danger 色——从前成功是中性 accent、
@@ -990,6 +1002,8 @@ export function Settings() {
   const cardNote = (s: ModelCardStatus) =>
     s.kind === "idle" ? undefined : s.kind === "saved" ? (
       S.settings.saved
+    ) : s.kind === "unsaved" ? (
+      S.settings.unsaved
     ) : (
       <span className={s.tone}>{s.text}</span>
     );
@@ -1026,6 +1040,7 @@ export function Settings() {
                     test.reset();
                     saveChat.reset();
                     saveEmbed.reset();
+                    setDirty({ chat: true, embed: true });
                     setForm({
                       ...form,
                       chat_base_url: p.chat,
@@ -1052,7 +1067,7 @@ export function Settings() {
                       setTestCard("chat");
                       startTest();
                     }}
-                    disabled={test.isPending}
+                    disabled={test.isPending || dirty.chat}
                   >
                     {testCard === "chat" && test.isPending ? S.settings.testing : S.settings.test}
                   </Button>
@@ -1066,6 +1081,7 @@ export function Settings() {
                           chat_model: form.chat_model,
                           chat_api_key: form.chat_api_key,
                         }),
+                        { onSuccess: () => setDirty((d) => ({ ...d, chat: false })) },
                       );
                     }}
                     disabled={saveChat.isPending}
@@ -1124,7 +1140,7 @@ export function Settings() {
                       setTestCard("embed");
                       startTest();
                     }}
-                    disabled={test.isPending}
+                    disabled={test.isPending || dirty.embed}
                   >
                     {testCard === "embed" && test.isPending ? S.settings.testing : S.settings.test}
                   </Button>
@@ -1138,6 +1154,7 @@ export function Settings() {
                           embed_model: form.embed_model,
                           embed_api_key: form.embed_api_key,
                         }),
+                        { onSuccess: () => setDirty((d) => ({ ...d, embed: false })) },
                       );
                     }}
                     disabled={saveEmbed.isPending}
